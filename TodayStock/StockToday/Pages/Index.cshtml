@@ -1,0 +1,108 @@
+﻿@using Microsoft.JSInterop
+@using StockToday
+@using StockToday.BlazorDb
+@page "/"
+@inject HttpClient Http
+
+<div class="row">
+    <div class="stock_symbol_wrapper">
+        <input id="stock_symbol"  type="text" class="form-control" placeholder="Start typing company name..."  
+            onchange=@(async e => await OnStockSymbolChanged(e)) />
+    </div>
+</div>
+
+@if (Loading)
+{
+    <Loading></Loading>
+}
+else
+{
+    <div>
+        @foreach (var currentQuote in CurrentQuotes.Values)
+        {
+            <a href="#" onclick="@(() => Remove(currentQuote.Symbol))" class="badge badge-primary">@currentQuote.Symbol <sup>x</sup></a>
+        }
+    </div>
+    <div class="container2">
+        @foreach (var currentQuote in CurrentQuotes.Values)
+        {
+            <CompanyStockDetail CompanyInfo="@currentQuote"></CompanyStockDetail>
+        }
+    </div>
+}
+
+@functions {
+    private bool Loading { get; set; }
+    private static readonly Dictionary<string, CompanyInfo> CurrentQuotes = new Dictionary<string, CompanyInfo>();
+
+
+    [JSInvokable]
+    public static void OnMessageReceived(string message)
+    {
+        var latestCompanyStock = Json.Deserialize<LatestCompanyStock>(message);
+        if (CurrentQuotes.ContainsKey(latestCompanyStock.symbol))
+        {
+            var currentQuote = CurrentQuotes[latestCompanyStock.symbol];
+            currentQuote.latestPrice = latestCompanyStock.lastSalePrice;
+            currentQuote.change = latestCompanyStock.lastSalePrice - currentQuote.previousClose;
+            currentQuote.changePercent = currentQuote.change / currentQuote.previousClose;
+            if (latestCompanyStock.lastSalePrice > currentQuote.high) currentQuote.high = latestCompanyStock.lastSalePrice;
+            if (latestCompanyStock.lastSalePrice < currentQuote.low) currentQuote.low = latestCompanyStock.lastSalePrice;
+            if (latestCompanyStock.lastSalePrice > currentQuote.week52High) currentQuote.week52High = latestCompanyStock.lastSalePrice;
+            if (latestCompanyStock.lastSalePrice < currentQuote.week52Low) currentQuote.week52Low = latestCompanyStock.lastSalePrice;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync()
+    {
+        await JSRuntime.Current.InvokeAsync<bool>("autocomplete");
+    }
+
+    protected override async Task OnInitAsync()
+    {
+        var localStorageSymbols = await BlazorDbInterop.GetItem("Symbols");
+        if (!string.IsNullOrEmpty(localStorageSymbols))
+        {
+            foreach (var symbol in localStorageSymbols.Split(",".ToCharArray(), StringSplitOptions.RemoveEmptyEntries))
+            {
+                await OnStockSymbolChanged(new UIChangeEventArgs {Value = symbol});
+            }
+        }
+    }
+
+    async Task OnStockSymbolChanged(UIChangeEventArgs e)
+    {
+        var symbol = e.Value.ToString();
+        if (string.IsNullOrEmpty(symbol)) return;
+        if (CurrentQuotes.Count >= 6)
+        {
+            await JSRuntime.Current.InvokeAsync<bool>("launch_toast", "You can't watch more than 6 symbols. Please remove existing one from list below.");
+            return;
+        }
+        Loading = true;
+        try
+        {
+            var companyInfo = await Http.GetJsonAsync<CompanyInfo>("https://api.iextrading.com/1.0/stock/" + symbol + "/quote");
+            CurrentQuotes[companyInfo.Symbol] = companyInfo;
+            var symbols = string.Join(",", CurrentQuotes.Keys.ToArray());
+            await JSRuntime.Current.InvokeAsync<LatestCompanyStock>("registerSymbol", symbols);
+            await BlazorDbInterop.SetItem("Symbols", symbols);
+        }
+        catch
+        {
+            await JSRuntime.Current.InvokeAsync<bool>("launch_toast", $"The symbol \"{symbol}\" is not found. Please try again.");
+        }
+        finally
+        {
+            Loading = false;
+            await JSRuntime.Current.InvokeAsync<bool>("clearSymbolInput");
+        }
+    }
+
+    static async Task Remove(string symbol)
+    {
+        CurrentQuotes.Remove(symbol);
+        var symbols = string.Join(",", CurrentQuotes.Keys.ToArray());
+        await BlazorDbInterop.SetItem("Symbols", symbols);
+    }
+}

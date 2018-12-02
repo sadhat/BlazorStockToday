@@ -1,0 +1,33 @@
+﻿@using System.Runtime.CompilerServices
+@using Microsoft.JSInterop
+@using StockToday
+@using Timer = System.Timers.Timer
+@page "/gainer"
+
+@inject HttpClient Http
+
+<h1>Stock Gainers</h1>
+
+
+@if (companyInfos == null)
+{
+    <Loading></Loading>
+}
+else
+{
+    foreach (var companyInfo in companyInfos)
+    {
+        <CompanyStockDetail CompanyInfo="@companyInfo"></CompanyStockDetail>
+    }
+    
+}
+
+@functions {
+CompanyInfo[] companyInfos;
+readonly Timer _timer = new Timer(5000);
+protected override async Task OnInitAsync()
+{
+    companyInfos = await Http.GetJsonAsync<CompanyInfo[]>("https://api.iextrading.com/1.0/stock/market/list/gainers");
+}
+
+}

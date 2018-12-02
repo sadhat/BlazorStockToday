@@ -1,0 +1,40 @@
+﻿@using StockToday
+@using Timer = System.Timers.Timer
+@implements IDisposable
+<br />
+<div class="item">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">@CompanyInfo.CompanyName (@CompanyInfo.Symbol)</h5>
+            <h6 class="card-subtitle mb-2 text-muted font-size-12px">@CompanyInfo.PrimaryExchange - @CompanyInfo.Sector</h6>
+            <div><strong>@CompanyInfo.latestPrice</strong> <small>USD <span class="@ChangeColorClassName">@CompanyInfo.change.ToString("F") (@CompanyInfo.changePercentExtended.ToString("F")%) <span class="oi @ChangeIconClassName"></span></span></small></div>
+            <div class="font-size-12px">Open: @CompanyInfo.open</div>
+            <div class="font-size-12px">Close: @CompanyInfo.close</div>
+            <div class="font-size-12px">High: @CompanyInfo.high</div>
+            <div class="font-size-12px">Low: @CompanyInfo.low</div>
+            <div class="font-size-12px">52 Week High: @CompanyInfo.week52High</div>
+            <div class="font-size-12px">52 Week Low: @CompanyInfo.week52Low</div>
+        </div>
+    </div>
+</div>
+@functions {
+
+    [Parameter]
+    CompanyInfo CompanyInfo { get; set; }
+
+    string ChangeColorClassName => CompanyInfo.change < 0 ? "text-danger" : "text-success";
+    string ChangeIconClassName => CompanyInfo.change < 0 ? "oi-arrow-thick-bottom" : "oi-arrow-thick-top";
+    readonly Timer _timer = new Timer(5000);
+
+    protected override void OnInit()
+    {
+        _timer.Enabled = true;
+        _timer.Elapsed += (sender, args) => this.StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _timer.Enabled = false;
+    }
+}
+

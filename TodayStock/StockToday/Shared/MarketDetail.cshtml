@@ -1,0 +1,20 @@
+﻿@using StockToday
+
+@inject HttpClient Http
+<div class="row">
+    @{
+        if (market != null)
+        {
+            <div><h3 class="smallest-text">@market.DIA.quote.Symbol</h3></div>
+            <div class="position-absolute">@market.DIA.quote.changePercentExtended</div>
+        }
+    }
+</div>
+
+@functions {
+    Market market { get; set; }
+    protected override async Task OnInitAsync()
+    {
+        market = await Http.GetJsonAsync<Market>("https://api.iextrading.com/1.0/stock/market/batch?symbols=dia,spy&types=quote");
+    }
+}
